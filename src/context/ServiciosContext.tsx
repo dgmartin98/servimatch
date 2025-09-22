@@ -1,55 +1,79 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 
-type Servicio = {
+export type Servicio = {
   id: number;
   nombre: string;
   rubro: string;
   zona: string;
   imagen: string;
+  created_at: string;
 };
 
 type ServiciosContextType = {
   servicios: Servicio[];
-  agregarServicio: (servicio: Servicio) => void;
+  cargarServicios: () => Promise<void>;
+  agregarServicio: (nuevo: Omit<Servicio, "id" | "created_at">) => Promise<Servicio | null>;
+  loading: boolean;
+  error: string | null;
 };
 
-const ServiciosContext = createContext<ServiciosContextType | undefined>(
-  undefined
-);
-
-const serviciosIniciales: Servicio[] = [
-  { id: 1, nombre: "Juan Pérez", rubro: "Electricista", zona: "Palermo", imagen: "https://i.pravatar.cc/150?img=1" },
-  { id: 2, nombre: "María Gómez", rubro: "Plomera", zona: "Caballito", imagen: "https://i.pravatar.cc/150?img=2" },
-  { id: 3, nombre: "Carlos Ruiz", rubro: "Inmobiliaria", zona: "Recoleta", imagen: "https://i.pravatar.cc/150?img=3" },
-  { id: 4, nombre: "Ana Torres", rubro: "Gasista", zona: "Belgrano", imagen: "https://i.pravatar.cc/150?img=4" },
-  { id: 5, nombre: "Luis Fernández", rubro: "Carpintero", zona: "Almagro", imagen: "https://i.pravatar.cc/150?img=5" },
-  { id: 6, nombre: "Claudia Díaz", rubro: "Contadora", zona: "Microcentro", imagen: "https://i.pravatar.cc/150?img=6" },
-  { id: 7, nombre: "Pedro Sánchez", rubro: "Abogado", zona: "San Isidro", imagen: "https://i.pravatar.cc/150?img=7" },
-  { id: 8, nombre: "Florencia López", rubro: "Diseñadora Gráfica", zona: "Villa Urquiza", imagen: "https://i.pravatar.cc/150?img=8" },
-  { id: 9, nombre: "Martín Castro", rubro: "Profesor de Inglés", zona: "Lanús", imagen: "https://i.pravatar.cc/150?img=9" },
-  { id: 10, nombre: "Soledad Romero", rubro: "Psicóloga", zona: "Cañitas", imagen: "https://i.pravatar.cc/150?img=10" },
-];
+const ServiciosContext = createContext<ServiciosContextType | undefined>(undefined);
 
 export function ServiciosProvider({ children }: { children: React.ReactNode }) {
-  const [servicios, setServicios] = useState<Servicio[]>(serviciosIniciales);
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const agregarServicio = (servicio: Servicio) => {
-    setServicios((prev) => [...prev, servicio]);
+  const cargarServicios = async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("servicios")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setServicios((data ?? []) as Servicio[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    cargarServicios();
+  }, []);
+
+  const agregarServicio = async (nuevo: Omit<Servicio, "id" | "created_at">) => {
+    const { data, error } = await supabase
+      .from("servicios")
+      .insert([nuevo])
+      .select()
+      .single();
+
+    if (error) {
+      setError(error.message);
+      return null;
+    }
+    const creado = data as Servicio;
+    setServicios((prev) => [creado, ...prev]); // lo agregamos a la lista actual
+    return creado;
   };
 
   return (
-    <ServiciosContext.Provider value={{ servicios, agregarServicio }}>
+    <ServiciosContext.Provider
+      value={{ servicios, cargarServicios, agregarServicio, loading, error }}
+    >
       {children}
     </ServiciosContext.Provider>
   );
 }
 
 export function useServicios() {
-  const context = useContext(ServiciosContext);
-  if (!context) {
-    throw new Error("useServicios debe usarse dentro de ServiciosProvider");
-  }
-  return context;
+  const ctx = useContext(ServiciosContext);
+  if (!ctx) throw new Error("useServicios debe usarse dentro de ServiciosProvider");
+  return ctx;
 }

@@ -25,8 +25,11 @@ export default function ServiciosPage() {
   const [orden, setOrden] = useState("");
   const [paginaActual, setPaginaActual] = useState(1);
   const serviciosPorPagina = 6;
-  const { servicios } = useServicios();
+  const { servicios, loading, error } = useServicios();
   const { toggleFavorito, esFavorito } = useFavorites();
+
+  if (loading) return <p className="p-6">Cargando servicios...</p>;
+  if (error) return <p className="p-6 text-red-600">Error: {error}</p>;
 
   // Filtrar por nombre/rubro y zona
   let serviciosFiltrados = servicios.filter((servicio) => {
