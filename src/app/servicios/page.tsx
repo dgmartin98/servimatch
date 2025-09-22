@@ -1,28 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useFavorites } from "../../context/FavoritesContext";
+import { useServicios } from "../../context/ServiciosContext";
+
+
+
 
 type Servicio = {
   id: number;
   nombre: string;
   rubro: string;
   zona: string;
+  imagen: string;
 };
 
-const servicios: Servicio[] = [
-  { id: 1, nombre: "Juan Pérez", rubro: "Electricista", zona: "Palermo" },
-  { id: 2, nombre: "María Gómez", rubro: "Plomera", zona: "Caballito" },
-  { id: 3, nombre: "Carlos Ruiz", rubro: "Inmobiliaria", zona: "Recoleta" },
-  { id: 4, nombre: "Ana Torres", rubro: "Gasista", zona: "Belgrano" },
-  { id: 5, nombre: "Luis Fernández", rubro: "Carpintero", zona: "Almagro" },
-];
+
+
 
 export default function ServiciosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroZona, setFiltroZona] = useState("");
   const [orden, setOrden] = useState("");
-  const [favoritos, setFavoritos] = useState<number[]>([]);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const serviciosPorPagina = 6;
+  const { servicios } = useServicios();
+  const { toggleFavorito, esFavorito } = useFavorites();
 
   // Filtrar por nombre/rubro y zona
   let serviciosFiltrados = servicios.filter((servicio) => {
@@ -30,8 +34,7 @@ export default function ServiciosPage() {
       servicio.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       servicio.rubro.toLowerCase().includes(busqueda.toLowerCase());
 
-    const coincideZona =
-      filtroZona === "" || servicio.zona === filtroZona;
+    const coincideZona = filtroZona === "" || servicio.zona === filtroZona;
 
     return coincideBusqueda && coincideZona;
   });
@@ -46,6 +49,19 @@ export default function ServiciosPage() {
   // Zonas únicas
   const zonas = Array.from(new Set(servicios.map((s) => s.zona)));
 
+  // Resetear paginación al cambiar filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda, filtroZona, orden]);
+
+  // Calcular paginación
+  const totalPaginas = Math.ceil(serviciosFiltrados.length / serviciosPorPagina);
+  const inicio = (paginaActual - 1) * serviciosPorPagina;
+  const serviciosPaginados = serviciosFiltrados.slice(
+    inicio,
+    inicio + serviciosPorPagina
+  );
+
   // Limpiar filtros
   const limpiarFiltros = () => {
     setBusqueda("");
@@ -53,22 +69,28 @@ export default function ServiciosPage() {
     setOrden("");
   };
 
-  // Toggle favoritos
-  const toggleFavorito = (id: number) => {
-    if (favoritos.includes(id)) {
-      setFavoritos(favoritos.filter((fav) => fav !== id));
-    } else {
-      setFavoritos([...favoritos, id]);
-    }
+  // Resaltar búsqueda
+  const resaltar = (texto: string) => {
+    if (!busqueda) return texto;
+    const regex = new RegExp(`(${busqueda})`, "gi");
+    return texto.split(regex).map((parte, i) =>
+      regex.test(parte) ? (
+        <span key={i} className="bg-yellow-200 font-semibold">
+          {parte}
+        </span>
+      ) : (
+        parte
+      )
+    );
   };
 
   return (
-    <main className="p-8 min-h-screen bg-gray-50">
+    <main>
       <h1 className="text-3xl font-bold text-blue-600 mb-6">
         Servicios disponibles
       </h1>
 
-      {/* Filtros y orden */}
+      {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <input
           type="text"
@@ -115,41 +137,72 @@ export default function ServiciosPage() {
       </p>
 
       {/* Listado */}
-      {serviciosFiltrados.length > 0 ? (
+      {serviciosPaginados.length > 0 ? (
         <ul className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-          {serviciosFiltrados.map((servicio) => (
+          {serviciosPaginados.map((servicio) => (
             <li
               key={servicio.id}
-              className="p-6 bg-white rounded-lg shadow hover:shadow-lg transition relative"
+              className="bg-white rounded-lg shadow hover:shadow-lg transition relative overflow-hidden"
             >
+              {/* Favorito */}
               <button
-                onClick={() => toggleFavorito(servicio.id)}
-                className={`absolute top-3 right-3 text-2xl ${
-                  favoritos.includes(servicio.id)
-                    ? "text-red-500"
-                    : "text-gray-400"
+                onClick={() => toggleFavorito(servicio)}
+                className={`absolute top-3 right-3 text-2xl z-10 ${
+                  esFavorito(servicio.id) ? "text-red-500" : "text-gray-400"
                 }`}
                 title="Agregar a favoritos"
               >
                 ♥
               </button>
 
-              <h2 className="text-xl font-semibold text-gray-800">
-                {servicio.nombre}
-              </h2>
-              <p className="text-gray-600">{servicio.rubro}</p>
-              <p className="text-gray-500 text-sm">Zona: {servicio.zona}</p>
-              <Link
-                href={`/servicios/${servicio.id}`}
-                className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-              >
-                Ver detalle
-              </Link>
+              {/* Imagen */}
+              <img
+                src={servicio.imagen}
+                alt={servicio.nombre}
+                className="w-full h-40 object-cover"
+              />
+
+              <div className="p-4">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {resaltar(servicio.nombre)}
+                </h2>
+                <p className="text-gray-600">{resaltar(servicio.rubro)}</p>
+                <p className="text-gray-500 text-sm">Zona: {servicio.zona}</p>
+                <Link
+                  href={`/servicios/${servicio.id}`}
+                  className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                >
+                  Ver detalle
+                </Link>
+              </div>
             </li>
           ))}
         </ul>
       ) : (
         <p className="text-gray-600">No se encontraron servicios.</p>
+      )}
+
+      {/* Paginación */}
+      {totalPaginas > 1 && (
+        <div className="flex justify-center items-center gap-4 mt-6">
+          <button
+            disabled={paginaActual === 1}
+            onClick={() => setPaginaActual((prev) => prev - 1)}
+            className="px-4 py-2 bg-gray-300 text-gray-800 rounded disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span>
+            Página {paginaActual} de {totalPaginas}
+          </span>
+          <button
+            disabled={paginaActual === totalPaginas}
+            onClick={() => setPaginaActual((prev) => prev + 1)}
+            className="px-4 py-2 bg-gray-300 text-gray-800 rounded disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
       )}
     </main>
   );
